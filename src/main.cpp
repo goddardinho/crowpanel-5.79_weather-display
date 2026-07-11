@@ -267,9 +267,9 @@ bool connectToWiFi() {
   WiFi.mode(WIFI_STA);
   WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
   
-  // Connection Timeout (10 seconds)
-  const int wifiTimeoutMs = 10000;
-  const int delayMs = 500;
+  // Connection Timeout (180 seconds)
+  const int wifiTimeoutMs = 180000;
+  const int delayMs = 5000;
   int attempts = wifiTimeoutMs / delayMs;
   
   // Wait until Connection is Complete
