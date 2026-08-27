@@ -58,6 +58,11 @@ struct ForecastInfo {
   float pop;         // Probability of precipitation (%)
 };
 
+// Forward declarations for header layout helpers used before their definitions.
+int getCenteredTextX(const String& text, uint16_t fontSize, int areaStartX, int areaWidth);
+void drawBoldLine(int x1, int y1, int x2, int y2);
+int getRightAlignedX(const String& text, uint16_t fontSize, int rightEdge);
+
 //=============================================================================
 // Global Constants
 //=============================================================================
@@ -101,6 +106,20 @@ int httpResponseCode = 0;
 // Array to Store Forecast Data
 ForecastInfo hourlyForecasts[FORECAST_COUNT];
 
+// Metadata shown in the display header
+String displayLocation;
+String displayDayDate;
+String displayPressure;
+String displayWind;
+char displayPressureTrend = '-';
+int timezoneOffsetSeconds = TIMEZONE_OFFSET * 3600;
+int currentPressure = 1013;
+float currentWindSpeed = 0.0f;
+float currentWindDeg = 0.0f;
+String currentWindCardinal = "N";
+RTC_DATA_ATTR int previousPressure = 0;
+RTC_DATA_ATTR bool hasPreviousPressure = false;
+
 
 //=============================================================================
 // Deep-sleep Functions
@@ -128,6 +147,187 @@ void enterDeepSleep(bool wakeup) {
   esp_deep_sleep_start();
 }
 
+/**
+ * Converts wind direction in degrees to an eight-point cardinal direction.
+ *
+ * @param windDeg Wind direction in meteorological degrees.
+ * @return Cardinal direction, such as N or SW.
+ */
+String getCardinalDirection(float windDeg) {
+  static const char* directions[] = {
+    "N", "NE", "E", "SE", "S", "SW", "W", "NW"
+  };
+  float normalized = fmodf(windDeg, 360.0f);
+  if (normalized < 0) {
+    normalized += 360.0f;
+  }
+  const int index = (int)roundf(normalized / 45.0f) % 8;
+  return String(directions[index]);
+}
+
+/**
+ * Builds display header metadata (location and day/date)
+ *
+ * @param doc Parsed weather JSON document
+ */
+void buildDisplayMetadata(const JsonDocument& doc) {
+  const char* timezone = doc["timezone"] | "Local";
+
+  #ifdef LOCATION_NAME
+    if (strlen(LOCATION_NAME) > 0) {
+      displayLocation = String(LOCATION_NAME);
+    } else {
+      displayLocation = String(timezone);
+    }
+  #else
+    displayLocation = String(timezone);
+  #endif
+
+  // Use API timezone offset when available (helps with DST-aware formatting).
+  timezoneOffsetSeconds = doc["timezone_offset"] | (TIMEZONE_OFFSET * 3600);
+
+  time_t currentLocalTime = (time_t) (doc["current"]["dt"].as<long>() + timezoneOffsetSeconds);
+  struct tm *timeInfo = gmtime(&currentLocalTime);
+
+  char dayDateBuffer[24];
+  strftime(dayDateBuffer, sizeof(dayDateBuffer), "%a %b %d", timeInfo);
+  displayDayDate = String(dayDateBuffer);
+
+  currentPressure = doc["current"]["pressure"].as<int>();
+  if (hasPreviousPressure) {
+    if (currentPressure > previousPressure) {
+      displayPressureTrend = '^';
+    } else if (currentPressure < previousPressure) {
+      displayPressureTrend = 'v';
+    } else {
+      displayPressureTrend = '-';
+    }
+  }
+  previousPressure = currentPressure;
+  hasPreviousPressure = true;
+
+  const float pressureInHg = currentPressure * 0.0295299831f;
+  char pressureBuffer[24];
+  snprintf(pressureBuffer, sizeof(pressureBuffer), "P %.2f inHg", pressureInHg);
+  displayPressure = String(pressureBuffer);
+
+  currentWindSpeed = doc["current"]["wind_speed"].as<float>();
+  currentWindDeg = doc["current"]["wind_deg"].as<float>();
+  currentWindCardinal = getCardinalDirection(currentWindDeg);
+  const char* windUnit = TEMPERATURE_UNIT == 0 ? "m/s" : "mph";
+  char windBuffer[32];
+  snprintf(windBuffer, sizeof(windBuffer), "Wind %.1f %s", currentWindSpeed, windUnit);
+  displayWind = String(windBuffer) + " " + currentWindCardinal;
+}
+
+/**
+ * Calculates x-position for right-aligned text.
+ *
+ * EPD_ShowString advances by size/2 pixels per character.
+ *
+ * @param text Text to align
+ * @param fontSize Font size passed to EPD_ShowString
+ * @param rightEdge Right-most x coordinate to align against
+ * @return x-position to pass to EPD_ShowString
+ */
+int getRightAlignedX(const String& text, uint16_t fontSize, int rightEdge) {
+  const int charWidth = fontSize / 2;
+  int x = rightEdge - (text.length() * charWidth);
+  return x < 0 ? 0 : x;
+}
+
+/**
+ * Calculates x-position for centered text inside a fixed-width area.
+ *
+ * EPD_ShowString advances by size/2 pixels per character.
+ *
+ * @param text Text to center
+ * @param fontSize Font size passed to EPD_ShowString
+ * @param areaStartX Left x-coordinate of the area
+ * @param areaWidth Width of the area
+ * @return x-position to pass to EPD_ShowString
+ */
+int getCenteredTextX(const String& text, uint16_t fontSize, int areaStartX, int areaWidth) {
+  const int charWidth = fontSize / 2;
+  const int textWidth = text.length() * charWidth;
+  int x = areaStartX + ((areaWidth - textWidth) / 2);
+  return x < areaStartX ? areaStartX : x;
+}
+
+/**
+ * Draws a bold pressure trend arrow.
+ *
+ * @param centerX Center x-coordinate for the arrow.
+ * @param topY Top y-coordinate for the arrow.
+ * @param trend Arrow direction: ^, v, or -.
+ */
+void drawPressureTrendArrow(int centerX, int topY, char trend) {
+  const int shaftX = centerX;
+  const int arrowTop = topY + 2;
+  const int arrowBottom = topY + 22;
+  const int headWidth = 9;
+
+  if (trend == '^') {
+    drawBoldLine(shaftX, arrowBottom, shaftX, arrowTop);
+    drawBoldLine(shaftX - headWidth, arrowTop + headWidth, shaftX, arrowTop);
+    drawBoldLine(shaftX + headWidth, arrowTop + headWidth, shaftX, arrowTop);
+  } else if (trend == 'v') {
+    drawBoldLine(shaftX, arrowTop, shaftX, arrowBottom);
+    drawBoldLine(shaftX - headWidth, arrowBottom - headWidth, shaftX, arrowBottom);
+    drawBoldLine(shaftX + headWidth, arrowBottom - headWidth, shaftX, arrowBottom);
+  } else {
+    drawBoldLine(shaftX - 12, topY + 13, shaftX + 12, topY + 13);
+    drawBoldLine(shaftX - 12, topY + 13, shaftX - 5, topY + 6);
+    drawBoldLine(shaftX + 12, topY + 13, shaftX + 5, topY + 6);
+  }
+}
+
+void drawBoldLine(int x1, int y1, int x2, int y2) {
+  const float lineX = (float)(x2 - x1);
+  const float lineY = (float)(y2 - y1);
+  const float lineLength = sqrtf((lineX * lineX) + (lineY * lineY));
+  if (lineLength == 0.0f) {
+    return;
+  }
+
+  const int offsetX = (int)roundf(-lineY / lineLength);
+  const int offsetY = (int)roundf(lineX / lineLength);
+  const int strokeWidth = 4;
+  const int firstOffset = -(strokeWidth / 2);
+  for (int stroke = 0; stroke < strokeWidth; stroke++) {
+    const int offset = firstOffset + stroke;
+    EPD_DrawLine(x1 + (offsetX * offset), y1 + (offsetY * offset),
+                 x2 + (offsetX * offset), y2 + (offsetY * offset), BLACK);
+  }
+}
+
+/**
+ * Draws a bold wind-direction arrow from the API degree value.
+ *
+ * @param centerX Center x-coordinate for the arrow.
+ * @param topY Top y-coordinate for the arrow.
+ * @param degrees Meteorological wind direction in degrees.
+ */
+void drawWindDirectionArrow(int centerX, int topY, float degrees) {
+  const int length = 20;
+  const int headLength = 9;
+  const float radians = degrees * PI / 180.0f;
+  const int centerY = topY + 22;
+  const int tipX = centerX + (int)roundf(sinf(radians) * length);
+  const int tipY = centerY - (int)roundf(cosf(radians) * length);
+  const float headAngle = 0.65f;
+
+  // Use a single-ended shaft so the arrowhead is the only pointed side.
+  drawBoldLine(centerX, centerY, tipX, tipY);
+
+  const int leftHeadX = tipX - (int)roundf(sinf(radians - headAngle) * headLength);
+  const int leftHeadY = tipY + (int)roundf(cosf(radians - headAngle) * headLength);
+  const int rightHeadX = tipX - (int)roundf(sinf(radians + headAngle) * headLength);
+  const int rightHeadY = tipY + (int)roundf(cosf(radians + headAngle) * headLength);
+  drawBoldLine(leftHeadX, leftHeadY, tipX, tipY);
+  drawBoldLine(rightHeadX, rightHeadY, tipX, tipY);
+}
+
 //=============================================================================
 // Display Functions
 //=============================================================================
@@ -141,7 +341,10 @@ void enterDeepSleep(bool wakeup) {
 void displayWeatherForecast()
 {
   const int textBufferSize = 40;    // Size of text buffer for formatting
-  const int columnWidth = 158;      // Width of each forecast column in pixels
+  const int displayWidth = 792;     // Effective drawable width in pixels
+  const int forecastStartX = 0;
+  const int columnWidth = displayWidth / FORECAST_COUNT;
+  const int contentTopY = 54;
   char buffer[textBufferSize];
 
   // Initialize Display
@@ -152,19 +355,45 @@ void displayWeatherForecast()
   EPD_Update();
   EPD_Clear_R26A6H();
 
+  // Display metadata header
+
+  // Center header text across the full display width.
+  const int locationX = getCenteredTextX(displayLocation, 24, 0, displayWidth);
+  EPD_ShowString(locationX, 4, (char*)displayLocation.c_str(), 24, BLACK);
+
+  memset(buffer, 0, sizeof(buffer));
+  snprintf(buffer, sizeof(buffer), "%s", displayDayDate.c_str());
+  const int dayDateX = getCenteredTextX(String(buffer), 24, 0, displayWidth);
+  EPD_ShowString(dayDateX, 28, buffer, 24, BLACK);
+
+  const int windX = 2;
+  const int windTextWidth = displayWind.length() * (24 / 2);
+  const int windCenterX = windX + (windTextWidth / 2);
+  drawWindDirectionArrow(windCenterX, 0, currentWindDeg);
+  EPD_ShowString(windX, 28, (char*)displayWind.c_str(), 24, BLACK);
+
+  const int pressureX = getRightAlignedX(displayPressure, 24, displayWidth - 2);
+  const int pressureTextWidth = displayPressure.length() * (24 / 2);
+  const int pressureCenterX = pressureX + (pressureTextWidth / 2);
+  drawPressureTrendArrow(pressureCenterX, 0, displayPressureTrend);
+  EPD_ShowString(pressureX, 28, (char*)displayPressure.c_str(), 24, BLACK);
+
+  EPD_DrawLine(0, contentTopY, 791, contentTopY, BLACK);
+
   // Display Each Forecast Data
   for (int i = 0; i < FORECAST_COUNT; i++) {
     if (hourlyForecasts[i].time.length() > 0) {
       // Calculate x position for this column
-      int baseX = columnWidth * i;
+      int baseX = forecastStartX + columnWidth * i;
       
       // Display Time
       memset(buffer, 0, sizeof(buffer));
-      snprintf(buffer, sizeof(buffer), "%s ", hourlyForecasts[i].time);
-      EPD_ShowString(26 + baseX, 18, buffer, 44, BLACK);
+      snprintf(buffer, sizeof(buffer), "%s", hourlyForecasts[i].time.c_str());
+      EPD_ShowString(getCenteredTextX(String(buffer), 24, baseX, columnWidth), 58, buffer, 24, BLACK);
 
       // Display Weather Icon
-      EPD_ShowPicture(16 + baseX, 60, 128, 128, Weather_Num[hourlyForecasts[i].iconNumber], WHITE);
+      const int iconX = baseX + ((columnWidth - 128) / 2);
+      EPD_ShowPicture(iconX, 82, 128, 128, Weather_Num[hourlyForecasts[i].iconNumber], WHITE);
 
       // Display Temperature with appropriate unit
       memset(buffer, 0, sizeof(buffer));
@@ -173,22 +402,24 @@ void displayWeatherForecast()
       } else {
         snprintf(buffer, sizeof(buffer), "%3d F", (int)round(hourlyForecasts[i].temperature));
       }
-      EPD_ShowString(30 + baseX, 190, buffer, 36, BLACK);
-      EPD_DrawCircle(100 + baseX, 201, 2, BLACK, false);
-      EPD_DrawCircle(100 + baseX, 201, 3, BLACK, false);
+      const int temperatureX = getCenteredTextX(String(buffer), 24, baseX, columnWidth);
+      EPD_ShowString(temperatureX, 212, buffer, 24, BLACK);
+      EPD_DrawCircle(temperatureX + 44, 220, 2, BLACK, false);
+      EPD_DrawCircle(temperatureX + 44, 220, 3, BLACK, false);
 
       if (i != 0) {
         // Display Probability of precipitation
         memset(buffer, 0, sizeof(buffer));
         snprintf(buffer, sizeof(buffer), "%3d %%", (int)round(100 * hourlyForecasts[i].pop));
-        EPD_ShowString(30 + baseX, 225, buffer, 36, BLACK);
+        EPD_ShowString(getCenteredTextX(String(buffer), 24, baseX, columnWidth), 238, buffer, 24, BLACK);
       }
     }
   }
 
   // Draw Separator Lines
   for (int i = 1; i < FORECAST_COUNT; i++) {
-    EPD_DrawLine(2 + columnWidth * i, 0, 2 + columnWidth * i, 271, BLACK);
+    int separatorX = forecastStartX + columnWidth * i;
+    EPD_DrawLine(separatorX, contentTopY, separatorX, 271, BLACK);
   }
 
   // Update Display
@@ -386,8 +617,8 @@ void storeWeatherInfo(int index, long unixTime, String iconCode, float temperatu
   }
 
   // Convert UTC Unix Timestamp to Local Time
-  time_t localTime = unixTime + TIMEZONE_OFFSET * 3600;
-  struct tm *timeinfo = localtime(&localTime);
+  time_t localTime = unixTime + timezoneOffsetSeconds;
+  struct tm *timeinfo = gmtime(&localTime);
 
   // Store Information in Structure
   char tempTimeStr[6];
@@ -449,6 +680,8 @@ String fetchWeatherData(bool useTestData = TEST_MODE) {
   url += "&appid=" + (String) OPENWEATHERMAP_API_KEY;
 
   Serial.println("Fetching weather forecast data from OpenWeatherMap...");
+  Serial.print("OpenWeatherMap URL: ");
+  Serial.println(url);
   
   // Send HTTP Request and Get Response
   int retryCount = 0;
@@ -534,6 +767,9 @@ bool analyzeWeatherData(const String& jsonData) {
     displayErrorMessage(errorMsg.c_str());
     return false;
   }
+
+  // Store Current Weather Information
+  buildDisplayMetadata(doc);
 
   // Store Current Weather Information
   storeWeatherInfo(0, doc["current"]["dt"], 

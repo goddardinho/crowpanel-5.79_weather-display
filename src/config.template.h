@@ -13,8 +13,10 @@
 #define OPENWEATHERMAP_API_KEY "your OpenWeatherMap API key"
 #define LATITUDE 35.68130      // Latitude (e.g., Tokyo)
 #define LONGITUDE 139.76707    // Longitude (e.g., Tokyo)
+#define LOCATION_NAME ""       // Optional display label (falls back to API timezone if empty)
 #define TIMEZONE_OFFSET 9      // Offset from UTC (in hours)
 #define TEMPERATURE_UNIT 0     // 0 = Celsius, 1 = Fahrenheit
+#define PRESSURE_UNIT 0        // 0 = hPa, 1 = inHg
 
 // Interval Configurations (minutes)
 #define INTERVAL_IN_MINUTES 60 // 1 hour

@@ -13,12 +13,12 @@
 
 # Overview / 概要
 
-This project is a weather forecast display system that uses [Elecrow's CrowPanel ESP32 E-Paper HMI 5.79-inch Display](https://www.elecrow.com/crowpanel-esp32-5-79-e-paper-hmi-display-with-272-792-resolution-black-white-color-driven-by-spi-interface.html). It displays weather forecast at 3-hour intervals for the next 12 hours.
+This project is a weather forecast display system that uses [Elecrow's CrowPanel ESP32 E-Paper HMI 5.79-inch Display](https://www.elecrow.com/crowpanel-esp32-5-79-e-paper-hmi-display-with-272-792-resolution-black-white-color-driven-by-spi-interface.html). It displays weather forecast at 3-hour intervals for the next 12 hours, along with location, day/date, a wind compass gauge, wind speed/direction, pressure with 1-hour trend, and an optional battery indicator.
 The weather forecast data is retrieved via [OpenWeatherMap](https://openweathermap.org/) API.
 
 \[日本語\]
 
-このプロジェクトは、天気予報表示システムです。12時間後までの3時間ごとの天気予報を表示します。
+このプロジェクトは、天気予報表示システムです。12時間後までの3時間ごとの天気予報に加えて、場所、曜日と日付、風向コンパスゲージ、風速/風向、気圧と1時間変化トレンド、（任意で）バッテリー残量を表示します。
 ハードウェアは [ElecrowのCrowPanel ESP32 E-Paper HMI 5.79-inch Display](https://www.elecrow.com/crowpanel-esp32-5-79-e-paper-hmi-display-with-272-792-resolution-black-white-color-driven-by-spi-interface.html) を使っています。
 天気予報データは、[OpenWeatherMap](https://openweathermap.org/) APIにて取得します。
 
@@ -46,7 +46,7 @@ The system operates as follows:
 
 1. Connects to a 2.4 GHz WiFi network on startup.
 1. Retrieves the current weather and forecast (3, 6, 9, and 12 hours ahead) via [OpenWeatherMap](https://openweathermap.org/) API.
-1. Displays weather information (time, weather condition, temperature, and probability of precipitation) on the E-Paper display.
+1. Displays weather information on the E-Paper display: centered location/day-date header, wind compass gauge, pressure + 1-hour pressure trend in the right header, optional battery indicator in the left header, and hourly forecast columns (time, weather condition, temperature, and probability of precipitation).
 1. Enters [Deep-sleep mode](https://docs.espressif.com/projects/esp-idf/en/stable/esp32/api-reference/system/sleep_modes.html) to save power.
 1. Restarts after the configured interval (default: 1 hour).
 
@@ -56,7 +56,7 @@ The system operates as follows:
 
 1. 起動時に2.4GHz WiFiに接続する。
 1. [OpenWeatherMap](https://openweathermap.org/) APIを使って現在の天気と予報（3時間後、6時間後、9時間後、12時間後）を取得する。
-1. 電子ペーパーに天気情報を表示する（時刻、天気、気温、降水確率）。
+1. 電子ペーパーに天気情報を表示する（ヘッダー中央に場所と曜日/日付、ヘッダー右に気圧と1時間変化、ヘッダー左に任意でバッテリー残量、左カラムに風向コンパスと風速/風向、各予報カラムに時刻・天気・気温・降水確率）。
 1. 省電力のために [ディープスリープモード](https://docs.espressif.com/projects/esp-idf/en/stable/esp32/api-reference/system/sleep_modes.html) に入る。
 1. 設定された時間（デフォルト：1時間）後に再度起動する。
 
@@ -213,7 +213,10 @@ This system uses [One Call API 3.0](https://openweathermap.org/api/one-call-3), 
     #define OPENWEATHERMAP_API_KEY "your OpenWeatherMap API key"
     #define LATITUDE 35.68130      // Latitude (e.g., Tokyo)
     #define LONGITUDE 139.76707    // Longitude (e.g., Tokyo)
+    #define LOCATION_NAME "Cedar Hills, UT"  // Optional display label
     #define TIMEZONE_OFFSET 9      // Offset from UTC (in hours)
+    #define TEMPERATURE_UNIT 0     // 0 = Celsius, 1 = Fahrenheit
+    #define PRESSURE_UNIT 1        // 0 = hPa, 1 = inHg
 
     // Interval Configurations (minutes)
     #define INTERVAL_IN_MINUTES 60 // 1 hour
@@ -264,7 +267,10 @@ This system uses [One Call API 3.0](https://openweathermap.org/api/one-call-3), 
     #define OPENWEATHERMAP_API_KEY "あなたのOpenWeatherMap APIキー"
     #define LATITUDE 35.68130      // 緯度（例：東京）
     #define LONGITUDE 139.76707    // 経度（例：東京）
+    #define LOCATION_NAME "Cedar Hills, UT"  // 表示名（任意）
     #define TIMEZONE_OFFSET 9      // UTCからのオフセット（時間）
+    #define TEMPERATURE_UNIT 0     // 0 = 摂氏, 1 = 華氏
+    #define PRESSURE_UNIT 1        // 0 = hPa, 1 = inHg
 
     // 更新間隔設定（分）
     #define INTERVAL_IN_MINUTES 60  // 1時間
