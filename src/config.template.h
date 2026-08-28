@@ -21,4 +21,12 @@
 // Interval Configurations (minutes)
 #define INTERVAL_IN_MINUTES 60 // 1 hour
 
+// CrowPanel side controls
+#define SIDE_BUTTON_MENU_PIN 2
+#define SIDE_BUTTON_EXIT_PIN 1
+#define SIDE_ROCKER_DOWN_PIN 4
+#define SIDE_ROCKER_CONFIRM_PIN 5
+#define SIDE_ROCKER_UP_PIN 6
+#define SIDE_CONTROLS_ENABLED 1
+
 #endif

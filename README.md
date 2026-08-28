@@ -4,6 +4,7 @@
 - [Photos / 写真](#photos--写真)
 - [Why I Made This / 開発のきっかけ](#why-i-made-this--開発のきっかけ)
 - [How the System Works / 動作概要](#how-the-system-works--動作概要)
+- [Side Controls / サイドコントロール](#side-controls--サイドコントロール)
 - [Hardware / ハードウェア構成](#hardware--ハードウェア構成)
 - [Before You Start / 事前準備](#before-you-start--事前準備)
 - [Installation / インストール方法](#installation--インストール方法)
@@ -59,6 +60,28 @@ The system operates as follows:
 1. 電子ペーパーに天気情報を表示する（ヘッダー中央に場所と曜日/日付、ヘッダー右に気圧と1時間変化、ヘッダー左に任意でバッテリー残量、左カラムに風向コンパスと風速/風向、各予報カラムに時刻・天気・気温・降水確率）。
 1. 省電力のために [ディープスリープモード](https://docs.espressif.com/projects/esp-idf/en/stable/esp32/api-reference/system/sleep_modes.html) に入る。
 1. 設定された時間（デフォルト：1時間）後に再度起動する。
+
+# Side Controls / サイドコントロール
+
+The CrowPanel side controls can also wake the device from deep sleep. On wake/startup, the held or wake-triggering control changes the next display refresh:
+
+- Rocker Up: show the 5-day forecast screen.
+- Rocker Down: show the hourly forecast screen.
+- Rocker Confirm or Menu: refresh the current screen immediately.
+- Exit: return to the hourly forecast screen.
+
+The default CrowPanel 5.79-inch side-control pins are configured in `src/config.h` and `src/config.template.h`: Menu IO2, Exit IO1, Rocker Down IO4, Rocker Confirm IO5, and Rocker Up IO6. Set `SIDE_CONTROLS_ENABLED` to `0` to disable button wake and side-control handling.
+
+\[日本語\]
+
+CrowPanelのサイドコントロールでもディープスリープから復帰できます。復帰/起動時に押されている、または復帰を発生させた操作に応じて、次の表示更新が変わります。
+
+- Rocker Up: 5日間予報画面を表示する。
+- Rocker Down: 時間別予報画面を表示する。
+- Rocker Confirm または Menu: 現在の画面をすぐに更新する。
+- Exit: 時間別予報画面に戻る。
+
+CrowPanel 5.79インチのデフォルトのサイドコントロールピンは `src/config.h` と `src/config.template.h` で設定します。Menu IO2、Exit IO1、Rocker Down IO4、Rocker Confirm IO5、Rocker Up IO6です。ボタン復帰とサイドコントロール処理を無効にするには、`SIDE_CONTROLS_ENABLED` を `0` に設定してください。
 
 # Hardware / ハードウェア構成
 
