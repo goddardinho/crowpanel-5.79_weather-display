@@ -21,6 +21,9 @@
 // Interval Configurations (minutes)
 #define INTERVAL_IN_MINUTES 60 // 1 hour
 
+// Display color behavior
+#define INVERT_DISPLAY_DURING_DAY 1 // 1 = black background between sunrise and sunset
+
 // CrowPanel side controls
 #define SIDE_BUTTON_MENU_PIN 2
 #define SIDE_BUTTON_EXIT_PIN 1

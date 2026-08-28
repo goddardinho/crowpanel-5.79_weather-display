@@ -54,6 +54,10 @@ const int EPD_BUFFER_SIZE = 27200; // Size of E-Paper display buffer
 #define SIDE_ROCKER_UP_PIN 6
 #endif
 
+#ifndef INVERT_DISPLAY_DURING_DAY
+#define INVERT_DISPLAY_DURING_DAY 0
+#endif
+
 //=============================================================================
 // Type Definitions
 //=============================================================================
@@ -164,6 +168,8 @@ int currentPressure = 1013;
 float currentWindSpeed = 0.0f;
 float currentWindDeg = 0.0f;
 String currentWindCardinal = "N";
+uint16_t displayBackgroundColor = WHITE;
+uint16_t displayForegroundColor = BLACK;
 RTC_DATA_ATTR int previousPressure = 0;
 RTC_DATA_ATTR bool hasPreviousPressure = false;
 RTC_DATA_ATTR DisplayScreen selectedScreen = SCREEN_HOURLY;
@@ -393,6 +399,18 @@ void buildDisplayMetadata(const JsonDocument& doc) {
   snprintf(pressureBuffer, sizeof(pressureBuffer), "P %.2f inHg", pressureInHg);
   displayPressure = String(pressureBuffer);
 
+  const long currentTime = doc["current"]["dt"].as<long>();
+  const long sunriseTime = doc["current"]["sunrise"] | currentTime;
+  const long sunsetTime = doc["current"]["sunset"] | currentTime;
+  const bool isDaytime = currentTime >= sunriseTime && currentTime < sunsetTime;
+  if (INVERT_DISPLAY_DURING_DAY && isDaytime) {
+    displayBackgroundColor = BLACK;
+    displayForegroundColor = WHITE;
+  } else {
+    displayBackgroundColor = WHITE;
+    displayForegroundColor = BLACK;
+  }
+
   currentWindSpeed = doc["current"]["wind_speed"].as<float>();
   currentWindDeg = doc["current"]["wind_deg"].as<float>();
   currentWindCardinal = getCardinalDirection(currentWindDeg);
@@ -481,7 +499,7 @@ void drawLineWithStroke(int x1, int y1, int x2, int y2, int strokeWidth) {
   for (int stroke = 0; stroke < strokeWidth; stroke++) {
     const int offset = firstOffset + stroke;
     EPD_DrawLine(x1 + (offsetX * offset), y1 + (offsetY * offset),
-                 x2 + (offsetX * offset), y2 + (offsetY * offset), BLACK);
+                 x2 + (offsetX * offset), y2 + (offsetY * offset), displayForegroundColor);
   }
 }
 
@@ -538,8 +556,8 @@ void displayWeatherForecast()
   char buffer[textBufferSize];
 
   // Initialize Display
-  Paint_NewImage(ImageBW, EPD_W, EPD_H, Rotation, WHITE);
-  Paint_Clear(WHITE);
+  Paint_NewImage(ImageBW, EPD_W, EPD_H, Rotation, displayBackgroundColor);
+  Paint_Clear(displayBackgroundColor);
   EPD_FastMode1Init();
   EPD_Display_Clear();
   EPD_Update();
@@ -549,26 +567,26 @@ void displayWeatherForecast()
 
   // Center header text across the full display width.
   const int locationX = getCenteredTextX(displayLocation, 24, 0, displayWidth);
-  EPD_ShowString(locationX, 4, (char*)displayLocation.c_str(), 24, BLACK);
+  EPD_ShowString(locationX, 4, (char*)displayLocation.c_str(), 24, displayForegroundColor);
 
   memset(buffer, 0, sizeof(buffer));
   snprintf(buffer, sizeof(buffer), "%s", displayDayDate.c_str());
   const int dayDateX = getCenteredTextX(String(buffer), 24, 0, displayWidth);
-  EPD_ShowString(dayDateX, 28, buffer, 24, BLACK);
+  EPD_ShowString(dayDateX, 28, buffer, 24, displayForegroundColor);
 
   const int windX = 2;
   const int windTextWidth = displayWind.length() * (24 / 2);
   const int windCenterX = windX + (windTextWidth / 2);
   drawWindDirectionArrow(windCenterX, 0, currentWindDeg);
-  EPD_ShowString(windX, 28, (char*)displayWind.c_str(), 24, BLACK);
+  EPD_ShowString(windX, 28, (char*)displayWind.c_str(), 24, displayForegroundColor);
 
   const int pressureX = getRightAlignedX(displayPressure, 24, displayWidth - 2);
   const int pressureTextWidth = displayPressure.length() * (24 / 2);
   const int pressureCenterX = pressureX + (pressureTextWidth / 2);
   drawPressureTrendArrow(pressureCenterX, 0, displayPressureTrend);
-  EPD_ShowString(pressureX, 28, (char*)displayPressure.c_str(), 24, BLACK);
+  EPD_ShowString(pressureX, 28, (char*)displayPressure.c_str(), 24, displayForegroundColor);
 
-  EPD_DrawLine(0, contentTopY, 791, contentTopY, BLACK);
+  EPD_DrawLine(0, contentTopY, 791, contentTopY, displayForegroundColor);
 
   // Display Each Forecast Data
   for (int i = 0; i < FORECAST_COUNT; i++) {
@@ -579,11 +597,11 @@ void displayWeatherForecast()
       // Display Time
       memset(buffer, 0, sizeof(buffer));
       snprintf(buffer, sizeof(buffer), "%s", hourlyForecasts[i].time.c_str());
-      EPD_ShowString(getCenteredTextX(String(buffer), 24, baseX, columnWidth), 58, buffer, 24, BLACK);
+      EPD_ShowString(getCenteredTextX(String(buffer), 24, baseX, columnWidth), 58, buffer, 24, displayForegroundColor);
 
       // Display Weather Icon
       const int iconX = baseX + ((columnWidth - 128) / 2);
-      EPD_ShowPicture(iconX, 82, 128, 128, Weather_Num[hourlyForecasts[i].iconNumber], WHITE);
+      EPD_ShowPicture(iconX, 82, 128, 128, Weather_Num[hourlyForecasts[i].iconNumber], displayBackgroundColor);
 
       // Display Temperature with appropriate unit
       memset(buffer, 0, sizeof(buffer));
@@ -593,16 +611,16 @@ void displayWeatherForecast()
         snprintf(buffer, sizeof(buffer), "%3d F", (int)round(hourlyForecasts[i].temperature));
       }
       const int temperatureX = getCenteredTextX(String(buffer), 24, baseX, columnWidth);
-      EPD_ShowString(temperatureX, 212, buffer, 24, BLACK);
-      EPD_DrawCircle(temperatureX + 44, 220, 2, BLACK, false);
-      EPD_DrawCircle(temperatureX + 44, 220, 3, BLACK, false);
+      EPD_ShowString(temperatureX, 212, buffer, 24, displayForegroundColor);
+      EPD_DrawCircle(temperatureX + 44, 220, 2, displayForegroundColor, false);
+      EPD_DrawCircle(temperatureX + 44, 220, 3, displayForegroundColor, false);
     }
   }
 
   // Draw Separator Lines
   for (int i = 1; i < FORECAST_COUNT; i++) {
     int separatorX = forecastStartX + columnWidth * i;
-    EPD_DrawLine(separatorX, contentTopY, separatorX, 271, BLACK);
+    EPD_DrawLine(separatorX, contentTopY, separatorX, 271, displayForegroundColor);
   }
 
   // Update Display
@@ -620,20 +638,20 @@ void displayDailyForecast()
   const int contentTopY = 54;
   char buffer[textBufferSize];
 
-  Paint_NewImage(ImageBW, EPD_W, EPD_H, Rotation, WHITE);
-  Paint_Clear(WHITE);
+  Paint_NewImage(ImageBW, EPD_W, EPD_H, Rotation, displayBackgroundColor);
+  Paint_Clear(displayBackgroundColor);
   EPD_FastMode1Init();
   EPD_Display_Clear();
   EPD_Update();
   EPD_Clear_R26A6H();
 
   const int locationX = getCenteredTextX(displayLocation, 24, 0, displayWidth);
-  EPD_ShowString(locationX, 4, (char*)displayLocation.c_str(), 24, BLACK);
+  EPD_ShowString(locationX, 4, (char*)displayLocation.c_str(), 24, displayForegroundColor);
 
   const String title = "5-Day Forecast";
   const int titleX = getCenteredTextX(title, 24, 0, displayWidth);
-  EPD_ShowString(titleX, 28, title.c_str(), 24, BLACK);
-  EPD_DrawLine(0, contentTopY, 791, contentTopY, BLACK);
+  EPD_ShowString(titleX, 28, title.c_str(), 24, displayForegroundColor);
+  EPD_DrawLine(0, contentTopY, 791, contentTopY, displayForegroundColor);
 
   for (int i = 0; i < DAILY_FORECAST_COUNT; i++) {
     if (dailyForecasts[i].day.length() > 0) {
@@ -641,10 +659,10 @@ void displayDailyForecast()
 
       memset(buffer, 0, sizeof(buffer));
       snprintf(buffer, sizeof(buffer), "%s", dailyForecasts[i].day.c_str());
-      EPD_ShowString(getCenteredTextX(String(buffer), 24, baseX, columnWidth), 58, buffer, 24, BLACK);
+      EPD_ShowString(getCenteredTextX(String(buffer), 24, baseX, columnWidth), 58, buffer, 24, displayForegroundColor);
 
       const int iconX = baseX + ((columnWidth - 128) / 2);
-      EPD_ShowPicture(iconX, 82, 128, 128, Weather_Num[dailyForecasts[i].iconNumber], WHITE);
+      EPD_ShowPicture(iconX, 82, 128, 128, Weather_Num[dailyForecasts[i].iconNumber], displayBackgroundColor);
 
       memset(buffer, 0, sizeof(buffer));
       if (TEMPERATURE_UNIT == 0) {
@@ -652,13 +670,13 @@ void displayDailyForecast()
       } else {
         snprintf(buffer, sizeof(buffer), "%d/%d F", (int)round(dailyForecasts[i].temperatureMax), (int)round(dailyForecasts[i].temperatureMin));
       }
-      EPD_ShowString(getCenteredTextX(String(buffer), 24, baseX, columnWidth), 212, buffer, 24, BLACK);
+      EPD_ShowString(getCenteredTextX(String(buffer), 24, baseX, columnWidth), 212, buffer, 24, displayForegroundColor);
     }
   }
 
   for (int i = 1; i < DAILY_FORECAST_COUNT; i++) {
     int separatorX = columnWidth * i;
-    EPD_DrawLine(separatorX, contentTopY, separatorX, 271, BLACK);
+    EPD_DrawLine(separatorX, contentTopY, separatorX, 271, displayForegroundColor);
   }
 
   EPD_Display(ImageBW);
