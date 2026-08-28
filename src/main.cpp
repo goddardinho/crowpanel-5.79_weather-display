@@ -96,7 +96,8 @@ struct DailyForecastInfo {
 
 enum DisplayScreen {
   SCREEN_HOURLY,
-  SCREEN_DAILY
+  SCREEN_DAILY,
+  SCREEN_ALERTS
 };
 
 enum SideControlAction {
@@ -173,6 +174,9 @@ uint16_t displayForegroundColor = BLACK;
 RTC_DATA_ATTR int previousPressure = 0;
 RTC_DATA_ATTR bool hasPreviousPressure = false;
 RTC_DATA_ATTR DisplayScreen selectedScreen = SCREEN_HOURLY;
+const size_t MAX_ALERT_COUNT = 3;
+String weatherAlerts[MAX_ALERT_COUNT];
+size_t weatherAlertCount = 0;
 
 
 //=============================================================================
@@ -272,12 +276,12 @@ SideControlAction readSideControlAction() {
 void applySideControlAction(SideControlAction action) {
   switch (action) {
     case SIDE_ACTION_ROCKER_UP:
-      selectedScreen = SCREEN_DAILY;
-      Serial.println("Switched to 5-day forecast screen");
+      selectedScreen = (DisplayScreen)((selectedScreen + 1) % 3);
+      Serial.println("Advanced to next screen");
       break;
     case SIDE_ACTION_ROCKER_DOWN:
-      selectedScreen = SCREEN_HOURLY;
-      Serial.println("Switched to hourly forecast screen");
+      selectedScreen = (DisplayScreen)((selectedScreen + 2) % 3);
+      Serial.println("Returned to previous screen");
       break;
     case SIDE_ACTION_EXIT:
       selectedScreen = SCREEN_HOURLY;
@@ -685,6 +689,46 @@ void displayDailyForecast()
   Serial.println("5-day forecast displayed successfully");
 }
 
+void displayWeatherAlerts()
+{
+  const int displayWidth = 792;
+  const int contentTopY = 54;
+
+  Paint_NewImage(ImageBW, EPD_W, EPD_H, Rotation, displayBackgroundColor);
+  Paint_Clear(displayBackgroundColor);
+  EPD_FastMode1Init();
+  EPD_Display_Clear();
+  EPD_Update();
+  EPD_Clear_R26A6H();
+
+  const int locationX = getCenteredTextX(displayLocation, 24, 0, displayWidth);
+  EPD_ShowString(locationX, 4, (char*)displayLocation.c_str(), 24, displayForegroundColor);
+
+  const String title = "Weather Alerts";
+  const int titleX = getCenteredTextX(title, 24, 0, displayWidth);
+  EPD_ShowString(titleX, 28, title.c_str(), 24, displayForegroundColor);
+  EPD_DrawLine(0, contentTopY, 791, contentTopY, displayForegroundColor);
+
+  if (weatherAlertCount == 0) {
+    const String clearMessage = "No significant weather expected";
+    EPD_ShowString(getCenteredTextX(clearMessage, 24, 0, displayWidth), 112,
+                   clearMessage.c_str(), 24, displayForegroundColor);
+  } else {
+    for (size_t i = 0; i < weatherAlertCount; i++) {
+      const int rowY = 70 + (i * 60);
+      EPD_ShowString(24, rowY, weatherAlerts[i].c_str(), 24, displayForegroundColor);
+      if (i + 1 < weatherAlertCount) {
+        EPD_DrawLine(24, rowY + 42, 768, rowY + 42, displayForegroundColor);
+      }
+    }
+  }
+
+  EPD_Display(ImageBW);
+  EPD_PartUpdate();
+
+  Serial.println("Weather alerts displayed successfully");
+}
+
 /**
  * Displays an error message on the E-Paper display
  * 
@@ -1042,6 +1086,10 @@ bool analyzeWeatherData(const String& jsonData) {
     dailyForecasts[i].temperatureMin = 0.0f;
     dailyForecasts[i].temperatureMax = 0.0f;
   }
+  weatherAlertCount = 0;
+  for (size_t i = 0; i < MAX_ALERT_COUNT; i++) {
+    weatherAlerts[i] = "";
+  }
 
   // Parse JSON Data
   JsonDocument doc;
@@ -1091,6 +1139,29 @@ bool analyzeWeatherData(const String& jsonData) {
       Serial.print("Warning: Daily index ");
       Serial.print(i);
       Serial.println(" is out of range");
+    }
+  }
+
+  const float highWindThreshold = TEMPERATURE_UNIT == 0 ? 11.2f : 25.0f;
+  bool hasRainAlert = false;
+  bool hasSnowAlert = false;
+  bool hasThunderstormAlert = false;
+  bool hasWindAlert = false;
+  for (int i = 0; i < FORECAST_COUNT && weatherAlertCount < MAX_ALERT_COUNT; i++) {
+    if (hourlyForecasts[i].iconNumber == ICON_THUNDERSTORM && !hasThunderstormAlert) {
+      weatherAlerts[weatherAlertCount++] = hourlyForecasts[i].time + "  Thunderstorms expected";
+      hasThunderstormAlert = true;
+    } else if (hourlyForecasts[i].iconNumber == ICON_SNOW && !hasSnowAlert) {
+      weatherAlerts[weatherAlertCount++] = hourlyForecasts[i].time + "  Snow expected";
+      hasSnowAlert = true;
+    } else if (hourlyForecasts[i].pop >= 0.5f && !hasRainAlert) {
+      weatherAlerts[weatherAlertCount++] = hourlyForecasts[i].time + "  Rain likely (" +
+                                            String((int)round(hourlyForecasts[i].pop * 100)) + "%)";
+      hasRainAlert = true;
+    }
+    if (currentWindSpeed >= highWindThreshold && !hasWindAlert && weatherAlertCount < MAX_ALERT_COUNT) {
+      weatherAlerts[weatherAlertCount++] = "Now  High winds expected";
+      hasWindAlert = true;
     }
   }
 
@@ -1165,6 +1236,8 @@ void setup() {
   // Display Weather Forecast
   if (selectedScreen == SCREEN_DAILY) {
     displayDailyForecast();
+  } else if (selectedScreen == SCREEN_ALERTS) {
+    displayWeatherAlerts();
   } else {
     displayWeatherForecast();
   }

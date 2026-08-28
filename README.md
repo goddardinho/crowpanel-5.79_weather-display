@@ -65,10 +65,12 @@ The system operates as follows:
 
 The CrowPanel side controls can also wake the device from deep sleep. On wake/startup, the held or wake-triggering control changes the next display refresh:
 
-- Rocker Up: show the 5-day forecast screen.
-- Rocker Down: show the hourly forecast screen.
+- Rocker Up: advance from hourly to 5-day forecast to weather alerts.
+- Rocker Down: move backward through weather alerts, 5-day forecast, and hourly forecast.
 - Rocker Confirm or Menu: refresh the current screen immediately.
 - Exit: return to the hourly forecast screen.
+
+The weather alerts screen summarizes rain, snow, thunderstorms, and high winds expected in the displayed forecast period. It remains available even when no significant weather is expected.
 
 The default CrowPanel 5.79-inch side-control pins are configured in `src/config.h` and `src/config.template.h`: Menu IO2, Exit IO1, Rocker Down IO4, Rocker Confirm IO5, and Rocker Up IO6. Set `SIDE_CONTROLS_ENABLED` to `0` to disable button wake and side-control handling.
 
@@ -76,10 +78,12 @@ The default CrowPanel 5.79-inch side-control pins are configured in `src/config.
 
 CrowPanelのサイドコントロールでもディープスリープから復帰できます。復帰/起動時に押されている、または復帰を発生させた操作に応じて、次の表示更新が変わります。
 
-- Rocker Up: 5日間予報画面を表示する。
-- Rocker Down: 時間別予報画面を表示する。
+- Rocker Up: 時間別予報、5日間予報、悪天候アラートの順に画面を切り替える。
+- Rocker Down: 悪天候アラート、5日間予報、時間別予報の順に戻る。
 - Rocker Confirm または Menu: 現在の画面をすぐに更新する。
 - Exit: 時間別予報画面に戻る。
+
+悪天候アラート画面には、表示期間中に予想される雨、雪、雷雨、強風をまとめて表示します。重大な天候が予想されない場合も、この画面は表示されます。
 
 CrowPanel 5.79インチのデフォルトのサイドコントロールピンは `src/config.h` と `src/config.template.h` で設定します。Menu IO2、Exit IO1、Rocker Down IO4、Rocker Confirm IO5、Rocker Up IO6です。ボタン復帰とサイドコントロール処理を無効にするには、`SIDE_CONTROLS_ENABLED` を `0` に設定してください。
 
